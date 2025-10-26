@@ -1,0 +1,260 @@
+alias: HE Sync – Film & Spiele
+description: >-
+  Synchronisiert Film-/Spielemodus über Harmony-Select (current_option_changed),
+  Helper und XMG – nur schalten, wenn nötig.
+triggers:
+  - entity_id: input_boolean.beamer
+    from: "off"
+    to: "on"
+    id: id-beamer-on
+    trigger: state
+  - entity_id: input_boolean.beamer
+    from: "on"
+    to: "off"
+    id: id-beamer-off
+    trigger: state
+  - entity_id: input_boolean.gamemode
+    from: "off"
+    to: "on"
+    id: id-Gamemode-On
+    trigger: state
+  - entity_id: input_boolean.gamemode
+    from: "on"
+    to: "off"
+    id: id-gamemode-off
+    trigger: state
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    to: Apple TV auf Beamer
+    id: id-harmony-AppleTV-on
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    to: Computer
+    id: id-harmony-computer
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    to: power_off
+    id: id-harmony-off
+conditions:
+  - condition: template
+    value_template: >-
+      {{ states('input_boolean.media_sync_guard') in
+      ['off','unknown','unavailable'] }}
+actions:
+  - variables:
+      trig: "{{ trigger.id | default('unknown') }}"
+      harm_select: select.wohnzimmer_aktivitaten
+      xmg: switch.klose_xmg_gamemode_gamemode
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ states('input_boolean.media_sync_guard') not in
+              ['unknown','unavailable'] }}
+        sequence:
+          - alias: Guard EIN
+            target:
+              entity_id: input_boolean.media_sync_guard
+            action: input_boolean.turn_on
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-beamer-on' }}"
+        sequence:
+          - alias: Harmony → Apple TV (nur falls nicht schon aktiv)
+            condition: template
+            value_template: "{{ states(harm_select) != 'Apple TV auf Beamer' }}"
+          - alias: Setze Harmony auf Apple TV (Device-Action)
+            device_id: 8d557801498ab6f5f324a09648307ffd
+            domain: select
+            entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+            type: select_option
+            option: Apple TV auf Beamer
+          - alias: Gamemode-Helper AUS
+            target:
+              entity_id: input_boolean.gamemode
+            action: input_boolean.turn_off
+          - alias: XMG nur AUS, wenn an
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "on"
+            then:
+              - alias: XMG AUS
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-beamer-off' }}"
+        sequence:
+          - alias: Harmony → power_off (nur falls nicht schon off)
+            condition: template
+            value_template: "{{ states(harm_select) != 'power_off' }}"
+          - alias: Setze Harmony auf power_off (Device-Action)
+            device_id: 8d557801498ab6f5f324a09648307ffd
+            domain: select
+            entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+            type: select_option
+            option: power_off
+          - alias: XMG nur AUS, wenn an
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "on"
+            then:
+              - alias: XMG AUS
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_off
+          - alias: Helper zurücksetzen (Beamer & Gamemode AUS)
+            target:
+              entity_id:
+                - input_boolean.beamer
+                - input_boolean.gamemode
+            action: input_boolean.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-Gamemode-On' }}"
+        sequence:
+          - alias: Harmony → Computer (nur falls nicht schon aktiv)
+            condition: template
+            value_template: "{{ states(harm_select) != 'Computer' }}"
+          - alias: Setze Harmony auf Computer (Device-Action)
+            device_id: 8d557801498ab6f5f324a09648307ffd
+            domain: select
+            entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+            type: select_option
+            option: Computer
+          - alias: Warte 10s
+            delay: "00:00:10"
+          - alias: XMG nur EIN, wenn aus
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "off"
+            then:
+              - alias: XMG EIN
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_on
+          - alias: Beamer-Helper AUS
+            target:
+              entity_id: input_boolean.beamer
+            action: input_boolean.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-gamemode-off' }}"
+        sequence:
+          - alias: Harmony → power_off (nur falls nicht schon off)
+            condition: template
+            value_template: "{{ states(harm_select) != 'power_off' }}"
+          - alias: Setze Harmony auf power_off (Device-Action)
+            device_id: 8d557801498ab6f5f324a09648307ffd
+            domain: select
+            entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+            type: select_option
+            option: power_off
+          - alias: XMG nur AUS, wenn an
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "on"
+            then:
+              - alias: XMG AUS
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_off
+          - alias: Helper zurücksetzen (Beamer & Gamemode AUS)
+            target:
+              entity_id:
+                - input_boolean.beamer
+                - input_boolean.gamemode
+            action: input_boolean.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-harmony-AppleTV-on' }}"
+        sequence:
+          - alias: Beamer-Helper EIN
+            target:
+              entity_id: input_boolean.beamer
+            action: input_boolean.turn_on
+          - alias: Gamemode-Helper AUS
+            target:
+              entity_id: input_boolean.gamemode
+            action: input_boolean.turn_off
+          - alias: XMG nur AUS, wenn an
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "on"
+            then:
+              - alias: XMG AUS
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-harmony-computer' }}"
+        sequence:
+          - alias: Gamemode-Helper EIN
+            target:
+              entity_id: input_boolean.gamemode
+            action: input_boolean.turn_on
+          - alias: XMG nur EIN, wenn aus
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "off"
+            then:
+              - alias: XMG EIN
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_on
+          - alias: Beamer-Helper AUS
+            target:
+              entity_id: input_boolean.beamer
+            action: input_boolean.turn_off
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 'id-harmony-off' }}"
+        sequence:
+          - alias: XMG nur AUS, wenn an
+            if:
+              - condition: state
+                entity_id: switch.klose_xmg_gamemode_gamemode
+                state: "on"
+            then:
+              - alias: XMG AUS
+                data:
+                  entity_id: switch.klose_xmg_gamemode_gamemode
+                action: switch.turn_off
+          - alias: Helper zurücksetzen (Beamer & Gamemode AUS)
+            target:
+              entity_id:
+                - input_boolean.beamer
+                - input_boolean.gamemode
+            action: input_boolean.turn_off
+  - alias: Entprellung 1s
+    delay: "00:00:01"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ states('input_boolean.media_sync_guard') not in
+              ['unknown','unavailable'] }}
+        sequence:
+          - alias: Guard AUS
+            target:
+              entity_id: input_boolean.media_sync_guard
+            action: input_boolean.turn_off
+mode: queued

@@ -1,0 +1,86 @@
+alias: Lichtsteuerung – Film & Gaming
+description: Steuert Kinolicht/Entspannen abhängig von Harmony-Aktivität und Gamemode.
+triggers:
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    from: Apple TV auf Beamer
+    to: power_off
+    id: t_movie_end_poweroff_from_appletv
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    from: Apple TV auf Beamer
+    to: Apple TV auf Fernseher
+    id: t_movie_end_tv_from_appletv
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    from: Computer
+    to: power_off
+    id: t_game_end_poweroff
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    from: Computer
+    to: Apple TV auf Fernseher
+    id: t_game_to_tv
+  - trigger: device
+    type: current_option_changed
+    device_id: 8d557801498ab6f5f324a09648307ffd
+    domain: select
+    entity_id: 3ffc521bfafa6c4c934bff2cdf6d81f4
+    to: Apple TV auf Beamer
+    id: t_movie_start
+  - entity_id: input_boolean.gamemode
+    from: "off"
+    to: "on"
+    id: t_gamemode_on
+    trigger: state
+conditions:
+  - condition: sun
+    before: sunrise
+    after: sunset
+    after_offset: "-00:30:00"
+actions:
+  - variables:
+      trig: "{{ trigger.id | default('') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 't_movie_start' }}"
+        sequence:
+          - delay: "00:00:45"
+          - target:
+              entity_id: scene.kinolicht
+            action: scene.turn_on
+      - conditions:
+          - condition: template
+            value_template: |
+              {{ trig in [
+                't_movie_end_poweroff_from_appletv',
+                't_movie_end_tv_from_appletv',
+                't_game_end_poweroff',
+                't_game_to_tv'
+              ] }}
+        sequence:
+          - target:
+              entity_id: scene.entspannen
+            action: scene.turn_on
+      - conditions:
+          - condition: template
+            value_template: "{{ trig == 't_gamemode_on' }}"
+        sequence:
+          - delay: "00:00:10"
+          - target:
+              entity_id: scene.gaming
+            action: scene.turn_on
+mode: single
