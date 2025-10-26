@@ -1,182 +1,133 @@
-# 🎮 Arcade / Beamer / Steam Automations-Setup
+# 🎮 Arcade / Windows / Projector / Steam / Home Assistant - Automation Setup
 
-## Ziel
-Dieser Rechner kann per **MQTT** aus Home Assistant in den **„Zocken“-Modus** gebracht werden.
+> **Important Note:**  
+> I am **not a programmer**.  
+> The **majority of the code and logic in this project was generated with the assistance of *ChatGPT‑5***.  
+> My primary contribution was the **concept, integration work, testing, troubleshooting, and guiding the Chat GPT** to produce a working solution.  
+> This repository should be viewed as **inspiration or reference**, *not* as production‑ready or generally reusable code.  
+> The implementation is **highly specific** to my environment and use case.
 
-Dabei passiert automatisch:
-
-1. Die **Arcade-Session** wird sichtbar gemacht (`tscon`)
-2. **Anzeige & Audio** werden auf den **Beamer** umgestellt
-3. **Steam Big Picture** wird im Benutzerkontext *Arcade* gestartet
-4. Beim Ausschalten wird alles wieder sauber zurückgesetzt
-5. Zum Schluss wird die **Arcade-Session getrennt**, sodass wieder der Login-Bildschirm erscheint
-
-Der Hauptnutzer bleibt **sicher getrennt**.  
-Der Rechner kann dauerhaft laufen und *Arcade* kann im Hintergrund eingeloggt bleiben.
+This project provides a **fully automated gaming mode** for a Windows PC that can be controlled from **Home Assistant via MQTT**.  
+When Gaming Mode is enabled, the system switches to a dedicated **Arcade user session**, routes **audio and display to a projector**, and starts **Steam Big Picture**.  
+When Gaming Mode is disabled, everything is reliably reverted and the system returns to a **locked login screen**, keeping the main desktop isolated and secure.
 
 ---
 
-## Benutzer / Sessions
+## 🎯 Goals
 
-| Benutzer | Zweck | Status |
+- Use a separate **Arcade account** for gaming, isolated from the main user
+- Automatically switch **display and audio output** to a projector
+- Reliably start & stop **Steam Big Picture**
+- Control the whole workflow using **MQTT** from Home Assistant
+- Keep the system secure and stable even when left running continuously
+
+---
+
+## 👤 Users / Sessions
+
+| User | Purpose | Behavior |
 |---|---|---|
-| **Arcade** | Spiel-Desktop | Bleibt dauerhaft angemeldet (meist „Getr.“) |
-| **Hauptnutzer** | Normalarbeiten / Admin | Taucht nach `disable` wieder am Login-Screen auf |
+| **Arcade** | Dedicated gaming desktop | Stays logged in (often disconnected) |
+| **Main User** | Normal desktop usage | Restored when Gaming Mode is disabled |
 
-Falls nötig: Autologon für *Arcade* → `Autologon.exe` (Sysinternals).
+If needed: Auto‑login for *Arcade* via `Autologon.exe` (Sysinternals).
 
 ---
 
-## Ablaufsteuerung
+## 🔄 Execution Flow (High‑Level)
 
-| Schritt | Wer führt es aus | Wie |
+| Step | Context | Method |
 |---|---|---|
-| Session sichtbar machen | SYSTEM | `tscon <SID> /dest:console` |
-| Anzeige + Audio setzen | SYSTEM **in** Arcade-Session | `PsExec -i <SID> -s zocken.ps1 -Enable -NoSteam` |
-| Steam starten | Arcade (User-Kontext) | `schtasks /Run /TN "Arcade-StartSteam"` |
-| Ausschalten | Arcade & SYSTEM | `Arcade-StopSteam` + `zocken.ps1 -Disable -NoSteam` |
-| Zurück zum Login-Screen | SYSTEM in Arcade-Session | `PsExec -i <SID> -s tsdiscon` |
+| Make Arcade session visible | SYSTEM | `tscon <SID> /dest:console` |
+| Switch display & audio | SYSTEM **inside** Arcade session | `PsExec -i <SID> -s zocken.ps1 -Enable -NoSteam` |
+| Launch Steam Big Picture | Arcade user | `schtasks /Run /TN "Arcade-StartSteam"` |
+| Stop Steam | Arcade user | `schtasks /Run /TN "Arcade-StopSteam"` |
+| Return to login screen | SYSTEM | `tsdiscon` |
 
 ---
 
-## Dateien
+## 📂 File Overview
 
-| Datei | Zweck |
+| File | Purpose |
 |---|---|
-| `zocken.ps1` | Schaltet Display + Audio (optional Steam) |
-| `Start-ZockenListener.ps1` | MQTT Listener + gesamte Ablaufsteuerung |
-| `start-steam.ps1` | Startet Steam Big Picture (Arcade-Kontext) |
-| `stop-steam.ps1` | Stoppt Steam (Arcade-Kontext) |
+| `zocken.ps1` | Switch display & audio, optionally control Steam |
+| `Start-ZockenListener.ps1` | MQTT listener & state controller |
+| `start-steam.ps1` | Starts Steam Big Picture (Arcade session) |
+| `stop-steam.ps1` | Stops Steam (Arcade session) |
 
 ---
 
-## Scheduled Tasks (müssen existieren)
+## 🗓 Required Scheduled Tasks
 
-| Taskname | Benutzer | Ruft auf |
+| Task Name | Runs As | Calls |
 |---|---|---|
-| `Arcade-StartSteam` | **Arcade** | `start-steam.ps1` |
-| `Arcade-StopSteam`  | **Arcade** | `stop-steam.ps1` |
-| `Start-ZockenListener` | **SYSTEM** (beim Systemstart) | `Start-ZockenListener.ps1` |
+| `Arcade-StartSteam` | Arcade user | `start-steam.ps1` |
+| `Arcade-StopSteam` | Arcade user | `stop-steam.ps1` |
+| `Start-ZockenListener` | SYSTEM (boot) | `Start-ZockenListener.ps1` |
 
 ---
 
-## MQTT
+## 📡 MQTT Topics
 
-| Topic | Payload | Wirkung |
+| Topic | Payload | Action |
 |---|---|---|
-| `windows/klose-xmg/zocken` | `enable` | Zocken **AN** |
-| `windows/klose-xmg/zocken` | `disable` | Zocken **AUS** |
+| `windows/klose-xmg/zocken` | `enable` | Activate Gaming Mode |
+| `windows/klose-xmg/zocken` | `disable` | Deactivate Gaming Mode |
 
 ---
 
-## Sequenzen
-
-### `enable`
-```
-Arcade-SID ermitteln
-tscon <SID> /dest:console
-zocken.ps1 -Enable -NoSteam
-schtasks /Run /TN "Arcade-StartSteam"
-```
-
-### `disable`
-```
-schtasks /Run /TN "Arcade-StopSteam"
-zocken.ps1 -Disable -NoSteam
-tsdiscon   # zurück zum Login
-```
-
----
-
-## Fazit
-✅ Hauptbenutzer bleibt geschützt  
-✅ Arcade läuft sichtbar für Spiele  
-✅ Start/Stop zuverlässig per MQTT  
-✅ Rückkehr zum Login nach dem Spielen automatisiert  
-
-
-# Home Assistant Integration – Zocken Modus
-
-Der PC kann über MQTT aus Home Assistant gesteuert werden.
-
-## MQTT Topics
-
-| Topic | Payload | Beschreibung |
-|---|---|---|
-| `windows/klose-xmg/zocken` | `enable` | Aktiviert den Zocken-Modus |
-| `windows/klose-xmg/zocken` | `disable` | Deaktiviert den Zocken-Modus |
-
-## Home Assistant: Schalter einrichten
-
-**Einstellungen → Geräte & Dienste → MQTT → Gerät hinzufügen → Manuell**
-
-1. Gerät anlegen, z. B. Name: `klose-xmg Gamemode`
-2. Entität hinzufügen → **Art der Entität: Schalter**
-
-Dann folgende Werte setzen:
-
-| Feld | Wert |
-|---|---|
-| **Command Topic** | `windows/klose-xmg/zocken` |
-| **Payload einschalten** | `enable` |
-| **Payload ausschalten** | `disable` |
-| **Retain** | aus |
-
-Speichern → Fertig.
-
-Nun gibt es in Home Assistant die Entität:
-
-```
-switch.klose_xmg_gamemode
-```
-
-## Beispiel Automation
+## 🏠 Home Assistant Integration (Example)
 
 ```yaml
-alias: Zocken nach Beamer-Einschalten
-trigger:
-  - platform: state
-    entity_id: switch.beamer
-    to: "on"
-action:
-  - service: switch.turn_on
-    target:
-      entity_id: switch.klose_xmg_gamemode
+switch:
+  - platform: mqtt
+    name: "XMG Gaming Mode"
+    command_topic: "windows/klose-xmg/zocken"
+    payload_on: "enable"
+    payload_off: "disable"
+    retain: false
 ```
 
-## 🧠 Automationen Übersicht
-
-### 🎬 HE Sync – Film & Spiele (Harmony ⇆ Gamemode ⇆ Beamer)
-Hält **Harmony-Aktivität**, **Beamer-Helper** und **Gamemode/XMG** sauber synchron.
-- Erkennt Zustände ausschließlich über `current_option_changed` der Harmony-Select-Entität.
-- Schaltet XMG **nur**, wenn das wirklich nötig ist (idempotent).
-- Verhindert Endlos-Schleifen mittels `media_sync_guard`.
-
-**Datei:** `automations/he_sync_final_ha_compatible.yaml`  
-*(oder in Home Assistant unter den Automationen importiert)*
-
-**Ablauf (vereinfacht):**
-| Auslöser | Ergebnis |
-|---|---|
-| Apple TV → Beamer | Beamer-Helper **AN**, Gamemode **AUS**, XMG **AUS** |
-| Computer → Beamer | Gamemode **AN**, Beamer **AUS**, XMG **AN** |
-| Harmony PowerOff | Gamemode **AUS**, Beamer **AUS**, XMG **AUS** |
-| Manuelle Helper-Änderung | Harmony wird bei Bedarf nachgezogen |
+Entity created:
+```
+switch.xmg_gaming_mode
+```
 
 ---
 
-### 💡 Lichtsteuerung – Film & Gaming
-Steuert automatisch die passende Lichtstimmung abhängig von Film, TV oder Gaming.
+## 🧠 Key Challenges Solved
 
-**Datei:** `automations/light_sync.yaml`
-
-**Ablauf (vereinfacht):**
-| Auslöser | Szene |
-|---|---|
-| Film startet (Apple TV → Beamer) | `scene.kinolicht` (mit Verzögerung) |
-| Film endet / zurück zum TV | `scene.entspannen` |
-| Gamemode wird aktiviert | `scene.gaming` |
-
-*(Aktiv nur bei Dunkelheit: nach Sonnenuntergang bis vor Sonnenaufgang mit Offset)*
+- Balancing **SYSTEM vs. User session** execution requirements
+- Ensuring the Arcade session is **visible and interactive**
+- Starting Steam Big Picture **reliably via Scheduled Tasks**
+- Switching display and audio **inside the correct session**
+- Running an MQTT listener **headless at system boot**
+- Preventing **automation feedback loops** in Home Assistant
+- Handling PsExec permissions, paths, and session visibility
 
 ---
+
+## ⚠️ Disclaimer
+
+- The code is **not written or engineered by hand** — it was created using **ChatGPT‑5**.
+- I am **not a software developer** — this was created through iterative refinement.
+- **Do NOT copy this setup 1:1** — it is highly dependent on:
+  - my hardware
+  - my projector & audio routing
+  - my Windows user/session layout
+  - my Home Assistant automation logic
+
+This project is best used as a **learning reference** or **starting point**, not a drop‑in solution.
+
+---
+
+## ✅ Result
+
+- Main desktop stays secure
+- Arcade session provides a clean gaming environment
+- One MQTT command controls the full experience
+- System always resets back to a safe login state
+
+---
+
+**Created, refined, tested, and debugged with the assistance of _ChatGPT‑5_.**
