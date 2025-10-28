@@ -1,4 +1,4 @@
-# 🎮 Arcade / Windows / Projector / Steam / Home Assistant - Automation Setup
+# 🎮 Arcade / Windows / Projector / Steam / Harmony / Home Assistant - Automation Setup
 
 > **Important Note:**  
 > I am **not a programmer**.  
